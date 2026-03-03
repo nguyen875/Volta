@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Allow: /shop
+Allow: /public/image/
+Disallow: /admin/
+Disallow: /users/
+Disallow: /products/create
+Disallow: /products/edit/
+Disallow: /cart/
+Disallow: /checkout
+Disallow: /profile
+Disallow: /carts/
+
+Sitemap: http://localhost/volta/public/sitemap.xml
