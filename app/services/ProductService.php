@@ -264,10 +264,6 @@ class ProductService
         return $this->imageDAO->delete($imageId);
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  PRODUCT RELATIONS
-    // ══════════════════════════════════════════════════════════
-
     /**
      * Get upsell products for a given product.
      * @return ProductRelationDTO[]

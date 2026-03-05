@@ -1,97 +1,123 @@
 <?php
+// app/controllers/DiscountController.php
+
+require_once __DIR__ . '/../helpers/Auth.php';
+require_once __DIR__ . '/../helpers/ApiResponse.php';
 require_once __DIR__ . '/../services/DiscountService.php';
 
 class DiscountController
 {
-    private $discountService;
+    private DiscountService $discountService;
 
     public function __construct()
     {
         $this->discountService = new DiscountService();
     }
 
-    public function index()
+    /**
+     * GET /api/discounts?page=&limit=
+     */
+    public function index(): void
     {
-        require_once __DIR__ . '/../helpers/Auth.php';
         Auth::requireAdmin();
 
-        $discounts = $this->discountService->getAllDiscounts();
-        require_once __DIR__ . '/../views/admin/discounts/list.php';
+        $page  = max(1, (int) ($_GET['page'] ?? 1));
+        $limit = max(1, (int) ($_GET['limit'] ?? 20));
+
+        $result = $this->discountService->paginate($page, $limit);
+
+        ApiResponse::paginated(
+            ApiResponse::dtoList($result['data']),
+            [
+                'page'  => $result['page'],
+                'limit' => $result['limit'],
+                'total' => $result['total'],
+            ]
+        );
     }
 
-    public function create()
+    /**
+     * GET /api/discounts/{id}
+     */
+    public function show(int $id): void
     {
-        require_once __DIR__ . '/../helpers/Auth.php';
         Auth::requireAdmin();
 
-        $mode = 'create';
-        $discount = null;
-        require_once __DIR__ . '/../views/admin/discounts/form.php';
-    }
-
-    public function store()
-    {
-        require_once __DIR__ . '/../helpers/Auth.php';
-        Auth::requireAdmin();
-
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            try {
-                $this->discountService->createDiscount($_POST);
-                header('Location: /volta/public/discounts');
-                exit;
-            } catch (Exception $e) {
-                echo "Error creating discount: " . $e->getMessage();
-            }
-        }
-    }
-
-    public function edit($id)
-    {
-        require_once __DIR__ . '/../helpers/Auth.php';
-        Auth::requireAdmin();
-
-        $mode = 'edit';
-        $discount = $this->discountService->getDiscountById($id);
-
+        $discount = $this->discountService->getById($id);
         if (!$discount) {
-            echo "Discount not found";
-            return;
+            ApiResponse::error('Discount not found.', 404);
         }
 
-        require_once __DIR__ . '/../views/admin/discounts/form.php';
+        ApiResponse::success(ApiResponse::dto($discount));
     }
 
-    public function update($id)
+    /**
+     * POST /api/discounts
+     * Body: { code, type, value, min_order?, uses_remaining?, expires_at? }
+     */
+    public function store(): void
     {
-        require_once __DIR__ . '/../helpers/Auth.php';
         Auth::requireAdmin();
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            try {
-                $this->discountService->updateDiscount($id, $_POST);
-                header('Location: /volta/public/discounts');
-                exit;
-            } catch (Exception $e) {
-                echo "Error updating discount: " . $e->getMessage();
-            }
-        }
-    }
-
-    public function destroy($id)
-    {
-        require_once __DIR__ . '/../helpers/Auth.php';
-        Auth::requireAdmin();
-
-        header('Content-Type: application/json');
+        $data = ApiResponse::body();
 
         try {
-            $this->discountService->deleteDiscount($id);
-            echo json_encode(['success' => true, 'message' => 'Discount deleted']);
-        } catch (Exception $e) {
-            http_response_code(500);
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            $id = $this->discountService->create($data);
+            $discount = $this->discountService->getById($id);
+
+            ApiResponse::success(
+                $discount ? ApiResponse::dto($discount) : ['id' => $id],
+                'Discount created successfully.',
+                201
+            );
+        } catch (\InvalidArgumentException $e) {
+            ApiResponse::error($e->getMessage(), 422);
+        } catch (\RuntimeException $e) {
+            ApiResponse::error($e->getMessage(), 409);
         }
-        exit;
+    }
+
+    /**
+     * PUT /api/discounts/{id}
+     * Body: { code?, type?, value?, min_order?, uses_remaining?, expires_at? }
+     */
+    public function update(int $id): void
+    {
+        Auth::requireAdmin();
+
+        $data = ApiResponse::body();
+        $this->discountService->update($id, $data);
+
+        $discount = $this->discountService->getById($id);
+        if (!$discount) {
+            ApiResponse::error('Discount not found.', 404);
+        }
+
+        ApiResponse::success(ApiResponse::dto($discount), 'Discount updated successfully.');
+    }
+
+    /**
+     * DELETE /api/discounts/{id}
+     */
+    public function destroy(int $id): void
+    {
+        Auth::requireAdmin();
+
+        $affected = $this->discountService->delete($id);
+        if ($affected === 0) {
+            ApiResponse::error('Discount not found.', 404);
+        }
+
+        ApiResponse::success(null, 'Discount deleted successfully.');
+    }
+
+    /**
+     * GET /api/discounts/valid
+     * Public or authenticated - get currently valid discounts.
+     */
+    public function valid(): void
+    {
+        $discounts = $this->discountService->getValid();
+        ApiResponse::success(ApiResponse::dtoList($discounts));
     }
 }
-?>

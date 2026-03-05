@@ -1,431 +1,319 @@
-# Volta - Online Electronic E-commerce Website
+# Volta — E-commerce REST API
 
-A comprehensive e-commerce platform for managing and selling electronics online, built with PHP, MySQL, and modern web technologies.
-
----
-
-## 🌟 Features
-
-### 👥 User Management
-- **Role-based Access Control**: Admin and Customer roles
-- **Secure Authentication**: 
-  - Login/Signup with password hashing (bcrypt)
-  - Session management with 30-minute timeout
-  - 401 error pages for unauthorized access
-- **Customer Profiles**: 
-  - Set default shipping information (phone & address)
-  - Profile editing for customers
-  - Auto-fill checkout forms with saved data
-
-### 📦 Product Management (Admin)
-- **CRUD Operations**: Create, Read, Update, Delete products
-- **Product Details**:
-  - Name, Author, Publisher, Category
-  - Price with discount rate support
-  - Stock quantity tracking
-  - ISBN, Page count, Language, Format
-  - Multiple keywords and descriptions
-- **Image Management**:
-  - Multiple images per product
-  - Set primary image
-  - Upload/Delete images
-  - Fallback placeholder images
-
-### 🛍️ Shopping Experience
-- **Product Catalog**:
-  - Browse all books with pagination
-  - Search by title, author, or keywords
-  - Filter by category
-  - Real-time stock status (In Stock/Low Stock/Out of Stock)
-- **Shopping Cart**:
-  - Add/Remove products
-  - Update quantities
-  - Real-time cart count
-  - AJAX cart operations with notifications
-- **Checkout Process**:
-  - Shipping information form
-  - Payment method selection (COD/Bank Transfer)
-  - Discount coupon application
-  - Order summary with totals
-
-### 💰 Discount System
-- **Coupon Management** (Admin):
-  - Create discount codes
-  - Set discount amounts
-  - Define conditions (minimum order, user type, etc.)
-  - Track coupon quantity and status
-- **Customer Usage**:
-  - Dropdown selection of active coupons
-  - Real-time discount calculation
-  - Automatic validation at checkout
-
-### 📋 Order Management
-- **Admin Dashboard**:
-  - View all orders with filters
-  - Order details with customer info
-  - Update order status (Pending → Confirmed → Delivering → Delivered)
-  - Update payment status (Unpaid → Paid)
-  - Track order statistics
-- **Customer View**:
-  - Order confirmation page
-  - Order history (future feature)
-  - Order status tracking
-
-### 🎨 User Interface
-- **Modern Design**:
-  - Tailwind CSS framework
-  - Gradient backgrounds
-  - Responsive layout (mobile-first)
-  - Card-based product displays
-- **Admin Panel**:
-  - Sidebar navigation
-  - Consistent form styling
-  - AJAX operations with toast notifications
-  - Icons library (Heroicons style)
-
-### 🔍 SEO Optimization
-1. **Meta Tags**: Title, description, keywords on all pages
-2. **Open Graph**: Facebook/LinkedIn sharing optimization
-3. **Twitter Cards**: Twitter sharing optimization
-4. **Schema.org Markup**: 
-   - BookStore structured data
-   - Product/Book schema for individual products
-   - Breadcrumb navigation
-5. **Semantic HTML**: Proper H1, H2, H3 hierarchy
-6. **Sitemap.xml**: Search engine discovery
-7. **Robots.txt**: Crawl control for search engines
-8. **Canonical URLs**: Prevent duplicate content
-9. **Alt Text**: All images have descriptive alt attributes
-10. **Internal Linking**: Footer with important links
-11. **Mobile-Friendly**: Fully responsive design
-12. **Performance**: Image lazy loading, optimized assets
+A backend-only REST API for an electronics e-commerce platform, built with PHP and MySQL. All responses are JSON; there is no server-rendered HTML.
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
-### MVC Pattern
 ```
 app/
-├── controllers/     # Business logic & routing handlers
-├── models/          # Data models (User, Product, Discount, etc.)
-├── dao/             # Data Access Objects (database operations)
-├── views/           # View templates
-│   ├── admin/       # Admin panel views
-│   ├── auth/        # Login/Signup pages
-│   ├── shop/        # Shop, product detail, cart, checkout
-│   ├── profile/     # Customer profile
-│   ├── public/      # Homepage, 404, 401 pages
-│   └── layouts/     # Headers & footers
-├── helpers/         # Utility classes (Auth, Icons)
-└── services/        # Business logic services
+├── controllers/     # API endpoint handlers (JSON responses)
+├── dao/             # Data Access Objects (PDO queries)
+├── dto/             # Data Transfer Objects (mapping & serialization)
+├── models/          # Domain models
+├── services/        # Business logic layer
+└── helpers/
+    ├── Auth.php         # Session-based auth guards
+    ├── ApiResponse.php  # JSON response helpers
+    └── Router.php       # Front-controller router
+config/
+├── db.php           # PDO singleton + session start
+├── routes.php       # All route definitions
+├── create_db.sql    # Database schema
+└── init_db.sql      # Sample data
+public/
+└── index.php        # Entry point (CORS + dispatch)
 ```
 
-### Database Schema
-- **LOGIN**: User accounts (UID, Email, Password, Role, Name)
-- **ADMIN**: Admin users (references LOGIN)
-- **CUSTOMER**: Customer details (references LOGIN, PhoneNum, Address)
-- **PRODUCT**: Book products (Product_ID, Name, Price, Stock, etc.)
-- **IMAGE**: Product images (Image_ID, ImageUrl, Product_ID)
-- **DISCOUNT_COUPON**: Discount codes (Code, MoneyDeduct, Condition, Quantity)
-- **ORDER**: Customer orders (Order_ID, UID, Total, Status, etc.)
-- **CONTAIN**: Order items (Order_ID, Product_ID, Quantity)
+### Layers
+
+| Layer | Responsibility |
+|---|---|
+| **Controller** | Parse request, call service, return JSON |
+| **Service** | Business logic, orchestrates DAOs |
+| **DAO** | Raw SQL via PDO, returns plain arrays |
+| **DTO** | Maps arrays ↔ typed objects, `toArray()` for serialization |
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ### Prerequisites
-- XAMPP (Apache + MySQL + PHP 7.4+)
-- Web browser
-- Text editor (VS Code recommended)
+- XAMPP (Apache + MySQL + PHP 8.0+)
+- Composer (for `vlucas/phpdotenv`)
 
 ### Steps
 
-1. **Clone/Download Project**
+1. **Clone into XAMPP**
    ```bash
    cd C:\xampp\htdocs
-   # Extract or clone project to 'volta' folder
+   git clone <repo> volta
+   cd volta
+   composer install
    ```
 
-2. **Create Database**
+2. **Environment**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your DB credentials
+   ```
+   ```ini
+   DB_HOST=localhost
+   DB_NAME=volta
+   DB_USERNAME=root
+   DB_PASSWORD=
+   ```
+
+3. **Database**
    - Open phpMyAdmin: `http://localhost/phpmyadmin`
-   - Create database: `book_store`
+   - Create database: `volta`
    - Import schema: `config/create_db.sql`
    - Import sample data: `config/init_db.sql`
 
-3. **Configure Database**
-   - Edit `config/database.php` if needed (default: localhost, root, no password)
+4. **Start XAMPP** — Apache + MySQL
 
-4. **Start XAMPP**
-   - Start Apache
-   - Start MySQL
-
-5. **Access Application**
-   - Homepage: `http://localhost/volta/public/`
-   - Admin Panel: `http://localhost/volta/public/users`
-   - Shop: `http://localhost/volta/public/shop`
+5. **Base URL**: `http://localhost/volta/public`
 
 ### Default Accounts
 ```
-Admin:
-- Email: admin@bookstore.com
-- Password: password123
-
-Customer:
-- Email: user1@example.com
-- Password: password123
+Admin:    admin@volta.com   / password123
+Customer: user@volta.com    / password123
 ```
 
 ---
 
-## 📂 File Structure
+## File Structure
 
 ```
 volta/
 ├── app/
 │   ├── controllers/
-│   │   ├── AuthController.php              # Login/Signup logic
-│   │   ├── UserController.php              # User CRUD (Admin)
-│   │   ├── ProductController.php           # Product CRUD (Admin)
-│   │   ├── DiscountController.php          # Discount CRUD (Admin)
-│   │   ├── CartController.php              # Order management (Admin)
-│   │   ├── CustomerCartController.php      # Shopping cart (Customer)
-│   │   ├── ShopController.php              # Shop browsing
-│   │   └── ProfileController.php           # Customer profile
+│   │   ├── AuthController.php            # Login, signup, logout, /me
+│   │   ├── UserController.php            # User CRUD (Admin)
+│   │   ├── ProductController.php         # Product CRUD + images + relations (Admin)
+│   │   ├── CategoryController.php        # Category CRUD
+│   │   ├── DiscountController.php        # Discount CRUD (Admin)
+│   │   ├── CartController.php            # Admin order management
+│   │   ├── OrderController.php           # Full order CRUD + stats (Admin)
+│   │   ├── CustomerCartController.php    # Cart + checkout (Customer)
+│   │   ├── ShopController.php            # Public storefront endpoints
+│   │   ├── ProfileController.php         # Profile + address management
+│   │   └── BundleController.php          # Bundle CRUD + items (Admin)
 │   ├── dao/
-│   │   ├── UserDAO.php                     # User database operations
-│   │   ├── ProductDAO.php                  # Product database operations
-│   │   ├── DiscountDAO.php                 # Discount database operations
-│   │   ├── CartDAO.php                     # Order database operations
-│   │   └── CustomerDAO.php                 # Customer profile operations
+│   │   ├── BaseDAO.php                   # Generic CRUD (findAll, findById, insert, update, delete, paginate)
+│   │   ├── UserDAO.php
+│   │   ├── ProductDAO.php
+│   │   ├── ProductImageDAO.php
+│   │   ├── ProductRelationDAO.php
+│   │   ├── CategoryDAO.php
+│   │   ├── DiscountDAO.php
+│   │   ├── OrderDAO.php
+│   │   ├── OrderItemDAO.php
+│   │   ├── CartDAO.php
+│   │   ├── AddressDAO.php
+│   │   ├── BundleDAO.php
+│   │   └── BundleItemDAO.php
+│   ├── dto/
+│   │   ├── UserDTO.php
+│   │   ├── ProductDTO.php
+│   │   ├── ProductImageDTO.php
+│   │   ├── ProductRelationDTO.php
+│   │   ├── CategoryDTO.php
+│   │   ├── DiscountDTO.php
+│   │   ├── OrderDTO.php
+│   │   ├── OrderItemDTO.php
+│   │   ├── CartItemDTO.php
+│   │   ├── AddressDTO.php
+│   │   ├── BundleDTO.php
+│   │   └── BundleItemDTO.php
 │   ├── models/
-│   │   ├── User.php                        # User model
-│   │   ├── Product.php                     # Product model
-│   │   └── Discount.php                    # Discount model
-│   ├── views/
-│   │   ├── admin/                          # Admin views
-│   │   │   ├── users/                      # User management
-│   │   │   ├── products/                   # Product management
-│   │   │   ├── discounts/                  # Discount management
-│   │   │   └── carts/                      # Order management
-│   │   ├── auth/                           # Authentication
-│   │   │   ├── login.php                   # Login page
-│   │   │   └── signup.php                  # Signup page
-│   │   ├── shop/                           # Shopping
-│   │   │   ├── shop.php                    # Product listing
-│   │   │   ├── product_detail.php          # Product details
-│   │   │   ├── cart.php                    # Shopping cart
-│   │   │   ├── checkout.php                # Checkout form
-│   │   │   └── order_success.php           # Order confirmation
-│   │   ├── profile/
-│   │   │   └── edit.php                    # Customer profile
-│   │   ├── public/
-│   │   │   ├── home.php                    # Homepage
-│   │   │   ├── 404.php                     # Not found error
-│   │   │   └── 401.php                     # Unauthorized error
-│   │   └── layouts/
-│   │       ├── admin_header.php            # Admin header
-│   │       ├── admin_footer.php            # Admin footer
-│   │       ├── public_header.php           # Public header (with SEO)
-│   │       └── public_footer.php           # Public footer
-│   ├── helpers/
-│   │   ├── Auth.php                        # Authentication helper
-│   │   └── Icons.php                       # SVG icons library
-│   └── services/                           # Business logic
+│   │   └── (domain models)
+│   ├── services/
+│   │   ├── UserService.php
+│   │   ├── ProductService.php
+│   │   ├── CategoryService.php
+│   │   ├── DiscountService.php
+│   │   ├── ShopService.php
+│   │   ├── CartService.php
+│   │   ├── CustomerCartService.php
+│   │   ├── OrderService.php
+│   │   ├── AddressService.php
+│   │   └── BundleService.php
+│   └── helpers/
+│       ├── Auth.php
+│       ├── ApiResponse.php
+│       └── Router.php
 ├── config/
-│   ├── database.php                        # PDO connection
-│   ├── create_db.sql                       # Database schema
-│   └── init_db.sql                         # Sample data
+│   ├── db.php
+│   ├── routes.php
+│   ├── create_db.sql
+│   └── init_db.sql
 ├── public/
-│   ├── index.php                           # Router (front controller)
-│   ├── css/                                # Stylesheets
-│   │   ├── tailwind.min.css               # Tailwind CSS
-│   │   ├── admin.css                       # Admin styles
-│   │   ├── auth.css                        # Login/Signup styles
-│   │   ├── homepage.css                    # Homepage styles
-│   │   └── shop.css                        # Shop styles
-│   ├── javascript/                         # Scripts
-│   │   ├── shop.js                         # Shop functionality
-│   │   └── notyf.min.js                   # Notifications
-│   ├── image/                              # Images
-│   │   ├── WebLogo.png                    # Site logo
-│   │   └── product/                        # Product images
-│   ├── sitemap.xml                         # SEO sitemap
-│   └── robots.txt                          # SEO robots file
-└── README.md                               # This file
+│   ├── index.php
+│   └── image/product/                    # Uploaded product images
+├── .env
+└── composer.json
 ```
 
 ---
 
-## 🔐 Security Features
+## API Reference
 
-- ✅ **Password Hashing**: bcrypt with `PASSWORD_DEFAULT`
-- ✅ **SQL Injection Prevention**: PDO prepared statements
-- ✅ **XSS Protection**: `htmlspecialchars()` on all outputs
-- ✅ **CSRF Protection**: Session-based authentication
-- ✅ **Role-based Access**: Admin/Customer separation
-- ✅ **Session Timeout**: 30-minute inactivity logout
-- ✅ **Secure Logout**: Proper session destruction
-- ✅ **Input Validation**: Server-side validation on all forms
+All endpoints are prefixed with `/volta/public`. All responses follow this envelope:
 
----
+```json
+{ "success": true, "message": "...", "data": { ... } }
+{ "success": false, "message": "...", "errors": { ... } }
+```
 
-## 🛣️ Routing
+Paginated responses include a `pagination` object: `{ page, limit, total }`.
 
-### Public Routes
-- `/` - Homepage
-- `/shop` - Product catalog
-- `/shop/product/{id}` - Product details
-- `/cart` - Shopping cart
-- `/checkout` - Checkout page
-- `/login` - Login page
-- `/signup` - Signup page
-- `/logout` - Logout action
-- `/profile` - Customer profile
-- `/order-success/{id}` - Order confirmation
+### Auth
 
-### Admin Routes (Requires Admin Role)
-- `/users` - User management
-- `/users/create` - Create user
-- `/users/edit/{id}` - Edit user
-- `/products` - Product management
-- `/products/create` - Create product
-- `/products/edit/{id}` - Edit product
-- `/products/{id}/images` - Manage product images
-- `/discounts` - Discount management
-- `/discounts/create` - Create discount
-- `/discounts/edit/{id}` - Edit discount
-- `/carts` - Order management
-- `/carts/view/{id}` - View order details
-- `/carts/edit/{id}` - Edit order status
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/login` | — | Login. Body: `{ email, password }` |
+| POST | `/api/signup` | — | Register. Body: `{ email, password, confirm_password, full_name, phone }` |
+| POST | `/api/logout` | Session | Destroy session |
+| GET | `/api/me` | Session | Get current user info |
 
----
+### Users (Admin)
 
-## 🎯 Key Technologies
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/users` | List users (`?search=&page=&limit=`) |
+| GET | `/api/users/{id}` | Get user |
+| POST | `/api/users` | Create user |
+| PUT | `/api/users/{id}` | Update user |
+| DELETE | `/api/users/{id}` | Delete user |
 
-- **Backend**: PHP 7.4+ (procedural & OOP)
-- **Database**: MySQL (PDO with prepared statements)
-- **Frontend**: HTML5, CSS3, JavaScript (ES6+)
-- **CSS Framework**: Tailwind CSS
-- **Architecture**: MVC Pattern, DAO Pattern
-- **Session Management**: PHP Sessions
-- **AJAX**: Fetch API for cart operations
-- **Icons**: SVG (Heroicons style)
-- **SEO**: Meta tags, Open Graph, Schema.org, Sitemap
+### Products (Admin)
 
----
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/products` | List products (`?search=&page=&limit=`) |
+| GET | `/api/products/{id}` | Get product + images |
+| POST | `/api/products` | Create product (form-data, supports `image` file) |
+| PUT | `/api/products/{id}` | Update product |
+| DELETE | `/api/products/{id}` | Delete product |
+| GET | `/api/products/{id}/images` | List images |
+| POST | `/api/products/{id}/images` | Upload image (form-data `image`) |
+| DELETE | `/api/products/{id}/images/{imageId}` | Delete image |
+| PUT | `/api/products/{id}/images/{imageId}/primary` | Set primary image |
+| GET | `/api/products/{id}/relations` | Get relations (`?type=upsell\|crosssell`) |
+| POST | `/api/products/{id}/relations` | Add relation |
+| DELETE | `/api/products/{id}/relations/{relationId}` | Remove relation |
 
-## 📊 Database Optimizations
+### Categories
 
-- ✅ Indexed foreign keys for fast joins
-- ✅ ENUM types for status fields
-- ✅ Proper data types (INT, DECIMAL, TEXT, TIMESTAMP)
-- ✅ CASCADE updates for discount coupons
-- ✅ Unique constraints on email and coupon codes
-- ✅ Auto-increment primary keys
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/categories` | — | List all categories |
+| GET | `/api/categories/{id}` | — | Get category |
+| POST | `/api/categories` | Admin | Create category |
+| PUT | `/api/categories/{id}` | Admin | Update category |
+| DELETE | `/api/categories/{id}` | Admin | Delete category |
 
----
+### Discounts (Admin)
 
-## 🧪 Testing Checklist
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/discounts` | List discounts (paginated) |
+| GET | `/api/discounts/valid` | List currently valid discounts |
+| GET | `/api/discounts/{id}` | Get discount |
+| POST | `/api/discounts` | Create discount |
+| PUT | `/api/discounts/{id}` | Update discount |
+| DELETE | `/api/discounts/{id}` | Delete discount |
 
-### User Authentication
-- [x] Sign up new customer account
-- [x] Login with valid credentials
-- [x] Login with invalid credentials (error handling)
-- [x] Session timeout after 30 minutes
-- [x] Logout clears session
-- [x] 401 page for unauthorized access
+### Orders — Admin
 
-### Shopping Flow
-- [x] Browse products with pagination
-- [x] Search products by keyword
-- [x] View product details
-- [x] Add product to cart (AJAX)
-- [x] Update cart quantities
-- [x] Remove items from cart
-- [x] Apply discount coupon
-- [x] Complete checkout
-- [x] View order confirmation
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/admin/orders` | List orders (`?status=&page=&limit=`) |
+| GET | `/api/admin/orders/stats` | Revenue & count stats (`?start_date=&end_date=`) |
+| GET | `/api/admin/orders/{id}` | Get order + items |
+| POST | `/api/admin/orders` | Create order manually |
+| PUT | `/api/admin/orders/{id}` | Update order |
+| PUT | `/api/admin/orders/{id}/status` | Update status only. Body: `{ status }` |
+| DELETE | `/api/admin/orders/{id}` | Delete order |
 
-### Admin Features
-- [x] Create/Edit/Delete users
-- [x] Create/Edit/Delete products
-- [x] Upload/Delete product images
-- [x] Create/Edit/Delete discounts
-- [x] View order list
-- [x] Update order status
-- [x] Update payment status
+### Cart & Checkout (Customer)
 
----
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/cart` | Get cart contents |
+| POST | `/api/cart/items` | Add item. Body: `{ product_id, quantity? }` |
+| PUT | `/api/cart/items` | Update quantity. Body: `{ product_id, quantity }` |
+| DELETE | `/api/cart/items/{productId}` | Remove item |
+| DELETE | `/api/cart` | Clear cart |
+| GET | `/api/cart/checkout` | Get checkout data (items + addresses) |
+| POST | `/api/cart/apply-discount` | Validate discount. Body: `{ discount_code, subtotal }` |
+| POST | `/api/cart/place-order` | Place order. Body: `{ address_id?, discount_code? }` |
+| GET | `/api/orders/my` | Customer's order history |
+| GET | `/api/orders/my/{id}` | Customer's order detail |
 
-## 🐛 Known Issues & Future Enhancements
+### Shop (Public)
 
-### Future Features
-- [ ] Customer order history page
-- [ ] Product reviews and ratings
-- [ ] Wishlist functionality
-- [ ] Advanced search filters
-- [ ] Email notifications for orders
-- [ ] Payment gateway integration
-- [ ] Multi-language support
-- [ ] Product recommendations
-- [ ] Analytics dashboard for admin
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/shop/products` | Paginated active products (`?search=&category_id=&page=&limit=`) |
+| GET | `/api/shop/products/{id}` | Product detail + images |
+| GET | `/api/shop/categories` | All categories |
+| GET | `/api/shop/featured` | Featured products (`?badge=hot&limit=8`) |
 
-### Optimization Opportunities
-- [ ] Image optimization (WebP format)
-- [ ] Lazy loading for product images
-- [ ] Redis/Memcached for session storage
-- [ ] CDN for static assets
-- [ ] Full-text search for products
-- [ ] API endpoints for mobile app
+### Bundles (Admin)
 
----
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/bundles` | List bundles |
+| GET | `/api/bundles/active` | Active bundles only |
+| GET | `/api/bundles/{id}` | Get bundle + items |
+| POST | `/api/bundles` | Create bundle (accepts `product_ids[]`) |
+| PUT | `/api/bundles/{id}` | Update bundle (accepts `product_ids[]` to sync) |
+| DELETE | `/api/bundles/{id}` | Delete bundle |
+| GET | `/api/bundles/{id}/items` | List bundle items |
+| POST | `/api/bundles/{id}/items` | Add item. Body: `{ product_id }` |
+| DELETE | `/api/bundles/{id}/items/{itemId}` | Remove item |
 
-## 📝 License
+### Profile (Authenticated)
 
-This project is created for educational purposes. All rights reserved.
-
----
-
-## 👥 Credits
-
-- **Developer**: Book Store Team
-- **Framework**: Tailwind CSS
-- **Icons**: Heroicons (SVG)
-- **Database**: MySQL
-- **Server**: XAMPP
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/profile` | Get profile + addresses |
+| PUT | `/api/profile` | Update profile. Body: `{ full_name?, phone?, password? }` |
+| GET | `/api/profile/addresses` | List addresses |
+| POST | `/api/profile/addresses` | Add address |
+| PUT | `/api/profile/addresses/{id}` | Update address |
+| DELETE | `/api/profile/addresses/{id}` | Delete address |
 
 ---
 
-## 📞 Support
+## Security
 
-For issues or questions:
-- 📧 Email: contact@bookstore.com
-- 📞 Phone: (028) 1234-5678
-- 📍 Address: 123 Nguyen Hue St, District 1, HCMC
-
----
-
-## 🔄 Version History
-
-### v2.0.0 (Current) - Major Update
-- ✅ Complete authentication system with 401 error handling
-- ✅ Customer profile management
-- ✅ Shopping cart with AJAX operations
-- ✅ Checkout process with discount coupons
-- ✅ Order management system
-- ✅ SEO optimization (12+ improvements)
-- ✅ Migrated from mysqli to PDO
-- ✅ Improved security (password hashing, input validation)
-- ✅ Modern UI with Tailwind CSS
-- ✅ Responsive design for mobile/tablet/desktop
-
-### v1.0.0 - Initial Release
-- Basic CRUD operations
-- User and product management
-- Simple authentication
+- **Password hashing**: bcrypt via `PASSWORD_DEFAULT`
+- **SQL injection**: PDO prepared statements throughout
+- **Auth guards**: `Auth::requireLogin()` / `Auth::requireAdmin()` return JSON 401/403
+- **Session timeout**: 30-minute inactivity
+- **CORS**: Configured in `public/index.php` — restrict `Access-Control-Allow-Origin` in production
+- **Input validation**: Service layer throws typed exceptions (`InvalidArgumentException`, `RuntimeException`)
 
 ---
 
-**Built with ❤️ for book lovers**
+## Version History
+
+### v3.0.0 (Current) — Backend API rewrite
+- Converted from full-stack MVC to backend-only REST API
+- All endpoints return JSON (no HTML views)
+- New layered architecture: Controller → Service → DAO → DTO
+- Added `ApiResponse` helper for consistent response envelope
+- Added `CategoryController`, `OrderController`, `BundleController`
+- Session-based auth with JSON 401/403 responses
+- CORS headers for cross-origin frontend consumption
+
+### v2.0.0 — Full-stack MVC
+- PHP + Tailwind CSS server-rendered app
+- PDO migration, session auth, AJAX cart
+
+### v1.0.0 — Initial Release
+- Basic CRUD, mysqli, simple auth

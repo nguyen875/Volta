@@ -1,165 +1,249 @@
 <?php
+// app/controllers/ProductController.php
+
+require_once __DIR__ . '/../helpers/Auth.php';
+require_once __DIR__ . '/../helpers/ApiResponse.php';
 require_once __DIR__ . '/../services/ProductService.php';
 
 class ProductController
 {
-    private $productService;
+    private ProductService $productService;
 
     public function __construct()
     {
         $this->productService = new ProductService();
     }
 
-    public function index()
+    /**
+     * GET /api/products?search=&page=&limit=
+     */
+    public function index(): void
     {
-        require_once __DIR__ . '/../helpers/Auth.php';
         Auth::requireAdmin();
 
         $search = $_GET['search'] ?? '';
-        $per_page = isset($_GET['per_page']) ? (int) $_GET['per_page'] : 10;
-        $current_page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
+        $page   = max(1, (int) ($_GET['page'] ?? 1));
+        $limit  = max(1, (int) ($_GET['limit'] ?? 20));
 
-        $data = $this->productService->getPaginatedProducts($search, $per_page, $current_page);
-        $products = $data['products'];
-        $pagination = $data['pagination'];
-
-        require_once __DIR__ . '/../views/admin/products/list.php';
-    }
-
-    public function create()
-    {
-        require_once __DIR__ . '/../helpers/Auth.php';
-        Auth::requireAdmin();
-
-        $product = null;
-        require_once __DIR__ . '/../views/admin/products/form.php';
-    }
-
-    public function store()
-    {
-        require_once __DIR__ . '/../helpers/Auth.php';
-        Auth::requireAdmin();
-
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $imageFile = $_FILES['image'] ?? null;
-
-            if ($imageFile && isset($imageFile['tmp_name'])) {
-                error_log("Image file details:");
-                error_log("  - Name: " . ($imageFile['name'] ?? 'N/A'));
-                error_log("  - Type: " . ($imageFile['type'] ?? 'N/A'));
-                error_log("  - Size: " . ($imageFile['size'] ?? '0'));
-                error_log("  - Error: " . ($imageFile['error'] ?? 'N/A'));
-                error_log("  - Tmp: " . ($imageFile['tmp_name'] ?? 'N/A'));
-                error_log("  - Tmp exists: " . (file_exists($imageFile['tmp_name']) ? 'YES' : 'NO'));
-            } else {
-                error_log("No image file uploaded or tmp_name missing");
-            }
-
-            $success = $this->productService->createProduct($_POST, $imageFile);
-
-            if ($success) {
-                $_SESSION['success'] = 'Product created successfully';
-            } else {
-                $_SESSION['error'] = 'Failed to create product';
-            }
-
-            header('Location: /volta/public/products');
-            exit;
+        if ($search !== '') {
+            $result = $this->productService->search($search, $page, $limit);
+        } else {
+            $result = $this->productService->paginate($page, $limit);
         }
+
+        ApiResponse::paginated(
+            ApiResponse::dtoList($result['data']),
+            [
+                'page'  => $result['page'],
+                'limit' => $result['limit'],
+                'total' => $result['total'],
+            ]
+        );
     }
 
-    public function edit($id)
+    /**
+     * GET /api/products/{id}
+     */
+    public function show(int $id): void
     {
-        require_once __DIR__ . '/../helpers/Auth.php';
         Auth::requireAdmin();
 
-        $product = $this->productService->getProductById($id);
-        if ($product) {
-            require_once __DIR__ . '/../views/admin/products/form.php';
-        } else
-            echo "Product not found";
-    }
-
-    public function update($id)
-    {
-        require_once __DIR__ . '/../helpers/Auth.php';
-        Auth::requireAdmin();
-
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $imageFile = $_FILES['image'] ?? null;
-            $success = $this->productService->updateProduct($id, $_POST, $imageFile);
-
-            if ($success) {
-                $_SESSION['success'] = 'Product updated successfully';
-            } else {
-                $_SESSION['error'] = 'Failed to update product';
-            }
-
-            header('Location: /volta/public/products');
-            exit;
+        $product = $this->productService->getById($id);
+        if (!$product) {
+            ApiResponse::error('Product not found.', 404);
         }
-    }
 
-    public function destroy($id)
-    {
-        require_once __DIR__ . '/../helpers/Auth.php';
-        Auth::requireAdmin();
+        $images = $this->productService->getImages($id);
 
-        $isAjax = isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
-        $result = $this->productService->deleteProduct($id);
-
-        header('Content-Type: application/json');
-        echo json_encode([
-            'success' => $result,
-            'message' => $result ? 'Product deleted successfully' : 'Failed to delete product'
+        ApiResponse::success([
+            'product' => ApiResponse::dto($product),
+            'images'  => ApiResponse::dtoList($images),
         ]);
-        exit;
     }
 
-    public function manageImages($id)
+    /**
+     * POST /api/products
+     * Body (form-data): { name, slug?, category_id, description, price, stock, badge?, is_active?, image? }
+     */
+    public function store(): void
     {
-        require_once __DIR__ . '/../helpers/Auth.php';
         Auth::requireAdmin();
 
-        $product = $this->productService->getProductById($id);
-        if ($product) {
-            $images = $this->productService->getProductImages($id);
-            require_once __DIR__ . '/../views/admin/products/images.php';
-        } else
-            echo "Product not found";
-    }
+        $data = ApiResponse::body();
 
-    public function uploadImage($id)
-    {
-        require_once __DIR__ . '/../helpers/Auth.php';
-        Auth::requireAdmin();
+        try {
+            $id = $this->productService->create($data);
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image'])) {
-            $this->productService->addImage($id, $_FILES['image']);
+            // Handle image upload if present
+            if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+                $this->productService->uploadImage($id, $_FILES['image']);
+            }
+
+            $product = $this->productService->getById($id);
+
+            ApiResponse::success(
+                $product ? ApiResponse::dto($product) : ['id' => $id],
+                'Product created successfully.',
+                201
+            );
+        } catch (\Exception $e) {
+            ApiResponse::error($e->getMessage(), 422);
         }
-        header('Location: /volta/public/products/' . $id . '/images');
-        exit;
     }
 
-    public function deleteImage($productId, $imageId)
+    /**
+     * PUT /api/products/{id}
+     * Body: { name?, slug?, category_id?, description?, price?, stock?, badge?, is_active? }
+     */
+    public function update(int $id): void
     {
-        require_once __DIR__ . '/../helpers/Auth.php';
         Auth::requireAdmin();
 
-        $result = $this->productService->deleteImage($imageId);
-        header('Content-Type: application/json');
-        echo json_encode(['success' => $result]);
-        exit;
+        $data = ApiResponse::body();
+        $this->productService->update($id, $data);
+
+        // Handle image upload if present (for multipart PUT)
+        if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+            $this->productService->uploadImage($id, $_FILES['image']);
+        }
+
+        $product = $this->productService->getById($id);
+        if (!$product) {
+            ApiResponse::error('Product not found.', 404);
+        }
+
+        ApiResponse::success(ApiResponse::dto($product), 'Product updated successfully.');
     }
 
-    public function setPrimaryImage($productId, $imageId)
+    /**
+     * DELETE /api/products/{id}
+     */
+    public function destroy(int $id): void
     {
-        require_once __DIR__ . '/../helpers/Auth.php';
         Auth::requireAdmin();
 
-        $result = $this->productService->setPrimaryImage($productId, $imageId);
-        header('Content-Type: application/json');
-        echo json_encode(['success' => $result]);
-        exit;
+        $affected = $this->productService->delete($id);
+        if ($affected === 0) {
+            ApiResponse::error('Product not found.', 404);
+        }
+
+        ApiResponse::success(null, 'Product deleted successfully.');
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  PRODUCT IMAGES
+    // ══════════════════════════════════════════════════════════
+
+    /**
+     * GET /api/products/{id}/images
+     */
+    public function images(int $productId): void
+    {
+        Auth::requireAdmin();
+
+        $images = $this->productService->getImages($productId);
+        ApiResponse::success(ApiResponse::dtoList($images));
+    }
+
+    /**
+     * POST /api/products/{id}/images
+     * Body (form-data): { image }
+     */
+    public function uploadImage(int $productId): void
+    {
+        Auth::requireAdmin();
+
+        if (!isset($_FILES['image'])) {
+            ApiResponse::error('No image file provided.', 422);
+        }
+
+        $imageId = $this->productService->uploadImage($productId, $_FILES['image']);
+        if ($imageId === false) {
+            ApiResponse::error('Failed to upload image. Check file type and size (max 5MB).', 422);
+        }
+
+        ApiResponse::success(['id' => $imageId], 'Image uploaded successfully.', 201);
+    }
+
+    /**
+     * DELETE /api/products/{productId}/images/{imageId}
+     */
+    public function deleteImage(int $productId, int $imageId): void
+    {
+        Auth::requireAdmin();
+
+        $affected = $this->productService->deleteImage($imageId);
+        if ($affected === 0) {
+            ApiResponse::error('Image not found.', 404);
+        }
+
+        ApiResponse::success(null, 'Image deleted successfully.');
+    }
+
+    /**
+     * PUT /api/products/{productId}/images/{imageId}/primary
+     */
+    public function setPrimaryImage(int $productId, int $imageId): void
+    {
+        Auth::requireAdmin();
+
+        $this->productService->setPrimaryImage($productId, $imageId);
+        ApiResponse::success(null, 'Primary image updated.');
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  PRODUCT RELATIONS
+    // ══════════════════════════════════════════════════════════
+
+    /**
+     * GET /api/products/{id}/relations?type=upsell|crosssell
+     */
+    public function relations(int $productId): void
+    {
+        Auth::requireAdmin();
+
+        $type = $_GET['type'] ?? 'crosssell';
+
+        if ($type === 'upsell') {
+            $relations = $this->productService->getUpsells($productId);
+        } else {
+            $relations = $this->productService->getCrossSells($productId);
+        }
+
+        ApiResponse::success(ApiResponse::dtoList($relations));
+    }
+
+    /**
+     * POST /api/products/{id}/relations
+     * Body: { related_id, type?, discount_amount?, sort_order? }
+     */
+    public function addRelation(int $productId): void
+    {
+        Auth::requireAdmin();
+
+        $data = ApiResponse::body();
+        $data['product_id'] = $productId;
+
+        try {
+            $id = $this->productService->addRelation($data);
+            ApiResponse::success(['id' => $id], 'Relation added successfully.', 201);
+        } catch (\Exception $e) {
+            ApiResponse::error($e->getMessage(), 422);
+        }
+    }
+
+    /**
+     * DELETE /api/products/{productId}/relations/{relationId}
+     */
+    public function removeRelation(int $productId, int $relationId): void
+    {
+        Auth::requireAdmin();
+
+        $affected = $this->productService->removeRelation($relationId);
+        if ($affected === 0) {
+            ApiResponse::error('Relation not found.', 404);
+        }
+
+        ApiResponse::success(null, 'Relation removed successfully.');
     }
 }

@@ -53,9 +53,7 @@ class Router {
         }
 
         // No route found
-        http_response_code(404);
-        include '../app/views/public/404.php';
-        exit;
+        ApiResponse::error('Route not found.', 404);
     }
 
     private function matchPattern($pattern, &$matches) {

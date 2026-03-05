@@ -1,69 +1,111 @@
 <?php
+// app/controllers/AuthController.php
+
 require_once __DIR__ . '/../helpers/Auth.php';
-require_once __DIR__ . '/../models/User.php';
+require_once __DIR__ . '/../helpers/ApiResponse.php';
+require_once __DIR__ . '/../services/UserService.php';
 
 class AuthController
 {
-    public static function handleLogin()
+    private UserService $userService;
+
+    public function __construct()
     {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
-            return;
-        $email = trim($_POST['email'] ?? '');
-        $password = $_POST['password'] ?? '';
-        if ($email === '' || $password === '') {
-            $_SESSION['auth_error'] = 'Email and password required';
-            header("Location: /volta/public/login");
-            exit;
-        }
-        $user = User::findByEmail($email);
-        if (!$user || !password_verify($password, $user->getPassword())) {
-            $_SESSION['auth_error'] = 'Invalid credentials';
-            header("Location: /volta/public/login");
-            exit;
-        }
-        // set session
-        $_SESSION['UID'] = $user->getId();
-        $_SESSION['Role'] = $user->getRole();
-        $_SESSION['Name'] = $user->getUsername();
-        // redirect based on role
-        if ($user->getRole() === 'Admin') {
-            header("Location: /volta/public/users");
-        } else {
-            header("Location: /volta/public/home");
-        }
-        exit;
+        $this->userService = new UserService();
     }
 
-    public static function handleSignup()
+    /**
+     * POST /api/login
+     * Body: { email, password }
+     */
+    public function login(): void
     {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST')
-            return;
-        $username = trim($_POST['username'] ?? '');
-        $email = trim($_POST['email'] ?? '');
-        $password = $_POST['password'] ?? '';
-        $confirm = $_POST['confirm_password'] ?? '';
-        if ($username === '' || $email === '' || $password === '') {
-            $_SESSION['auth_error'] = 'Name, email and password required';
-            header("Location: /volta/public/signup");
-            exit;
+        $data = ApiResponse::body();
+        $email    = trim($data['email'] ?? '');
+        $password = $data['password'] ?? '';
+
+        if ($email === '' || $password === '') {
+            ApiResponse::error('Email and password are required.', 422);
+        }
+
+        $user = $this->userService->authenticate($email, $password);
+        if (!$user) {
+            ApiResponse::error('Invalid credentials.', 401);
+        }
+
+        Auth::login($user->id, 'customer', $user->fullName);
+
+        ApiResponse::success([
+            'user' => ApiResponse::dto($user),
+        ], 'Login successful.');
+    }
+
+    /**
+     * POST /api/signup
+     * Body: { email, password, confirm_password, full_name, phone }
+     */
+    public function signup(): void
+    {
+        $data = ApiResponse::body();
+
+        $email    = trim($data['email'] ?? '');
+        $password = $data['password'] ?? '';
+        $confirm  = $data['confirm_password'] ?? '';
+        $fullName = trim($data['full_name'] ?? '');
+        $phone    = trim($data['phone'] ?? '');
+
+        if ($email === '' || $password === '') {
+            ApiResponse::error('Email and password are required.', 422);
         }
         if ($password !== $confirm) {
-            $_SESSION['auth_error'] = 'Passwords do not match';
-            header("Location: /volta/public/signup");
-            exit;
+            ApiResponse::error('Passwords do not match.', 422);
         }
-        // Force role Customer inside User::createCustomer
-        $res = User::createCustomer($username, $email, $password);
-        if (!$res['success']) {
-            $_SESSION['auth_error'] = $res['error'] ?? 'Signup failed';
-            header("Location: /volta/public/signup");
-            exit;
+
+        try {
+            $userId = $this->userService->create([
+                'email'     => $email,
+                'password'  => $password,
+                'full_name' => $fullName,
+                'phone'     => $phone,
+            ]);
+
+            $user = $this->userService->getById($userId);
+            Auth::login($userId, 'customer', $fullName);
+
+            ApiResponse::success([
+                'user' => $user ? ApiResponse::dto($user) : ['id' => $userId],
+            ], 'Account created successfully.', 201);
+
+        } catch (\InvalidArgumentException $e) {
+            ApiResponse::error($e->getMessage(), 422);
+        } catch (\RuntimeException $e) {
+            ApiResponse::error($e->getMessage(), 409);
         }
-        $user = $res['user'];
-        $_SESSION['UID'] = $user->getId();
-        $_SESSION['Role'] = $user->getRole();
-        $_SESSION['Name'] = $user->getUsername();
-        header("Location: /volta/public/home");
-        exit;
+    }
+
+    /**
+     * POST /api/logout
+     */
+    public function logout(): void
+    {
+        Auth::logout();
+        ApiResponse::success(null, 'Logged out successfully.');
+    }
+
+    /**
+     * GET /api/me
+     */
+    public function me(): void
+    {
+        Auth::requireLogin();
+
+        $user = $this->userService->getById(Auth::userId());
+        if (!$user) {
+            ApiResponse::error('User not found.', 404);
+        }
+
+        ApiResponse::success([
+            'user' => ApiResponse::dto($user),
+        ]);
     }
 }

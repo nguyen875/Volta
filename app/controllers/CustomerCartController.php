@@ -1,9 +1,14 @@
 <?php
+// app/controllers/CustomerCartController.php
+// Customer-facing cart + checkout
+
+require_once __DIR__ . '/../helpers/Auth.php';
+require_once __DIR__ . '/../helpers/ApiResponse.php';
 require_once __DIR__ . '/../services/CustomerCartService.php';
 
 class CustomerCartController
 {
-    private $cartService;
+    private CustomerCartService $cartService;
 
     public function __construct()
     {
@@ -11,314 +16,234 @@ class CustomerCartController
     }
 
     /**
-     * Display cart page
+     * GET /api/cart
      */
-    public function index()
+    public function index(): void
     {
-        // Cart page
-        include __DIR__ . '/../views/shop/cart.php';
-    }
+        Auth::requireLogin();
 
-    /**
-     * Add product to cart (AJAX)
-     */
-    public function add()
-    {
-        header('Content-Type: application/json');
+        $cart = $this->cartService->getCart(Auth::userId());
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $productId = intval($_POST['product_id'] ?? 0);
-            $quantity = intval($_POST['quantity'] ?? 1);
+        // Serialize cart items manually (they have join fields)
+        $items = array_map(function ($item) {
+            return [
+                'id'            => $item->id,
+                'product_id'    => $item->productId,
+                'quantity'      => $item->quantity,
+                'product_name'  => $item->productName,
+                'product_slug'  => $item->productSlug,
+                'product_price' => $item->productPrice,
+                'product_stock' => $item->productStock,
+                'image_url'     => $item->imageUrl,
+                'line_total'    => round(($item->productPrice ?? 0) * $item->quantity, 2),
+            ];
+        }, $cart['items']);
 
-            if ($productId > 0 && $quantity > 0) {
-                if (!isset($_SESSION['cart'])) {
-                    $_SESSION['cart'] = [];
-                }
-
-                if (isset($_SESSION['cart'][$productId])) {
-                    $_SESSION['cart'][$productId] += $quantity;
-                } else {
-                    $_SESSION['cart'][$productId] = $quantity;
-                }
-
-                echo json_encode([
-                    'success' => true,
-                    'message' => 'Product added to cart',
-                    'cartCount' => array_sum($_SESSION['cart'])
-                ]);
-                exit;
-            } else {
-                echo json_encode([
-                    'success' => false,
-                    'message' => 'Invalid product or quantity'
-                ]);
-                exit;
-            }
-        }
-
-        echo json_encode([
-            'success' => false,
-            'message' => 'Invalid request method'
+        ApiResponse::success([
+            'items'    => $items,
+            'subtotal' => $cart['subtotal'],
+            'count'    => $cart['count'],
         ]);
-        exit;
     }
 
     /**
-     * Update cart quantity (AJAX)
+     * POST /api/cart/items
+     * Body: { product_id, quantity? }
      */
-    public function update()
+    public function add(): void
     {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $productId = intval($_POST['product_id'] ?? 0);
-            $action = $_POST['action'] ?? '';
-
-            if ($productId > 0 && isset($_SESSION['cart'][$productId])) {
-                if ($action === 'increase') {
-                    $_SESSION['cart'][$productId]++;
-                } elseif ($action === 'decrease') {
-                    $_SESSION['cart'][$productId]--;
-                    if ($_SESSION['cart'][$productId] <= 0) {
-                        unset($_SESSION['cart'][$productId]);
-                    }
-                }
-            }
-        }
-
-        header('Location: /volta/public/cart');
-        exit;
-    }
-
-    /**
-     * Remove product from cart (AJAX)
-     */
-    public function remove()
-    {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $productId = intval($_POST['product_id'] ?? 0);
-
-            if ($productId > 0 && isset($_SESSION['cart'][$productId])) {
-                unset($_SESSION['cart'][$productId]);
-                $_SESSION['success'] = 'Product removed from cart';
-            }
-        }
-
-        header('Location: /volta/public/cart');
-        exit;
-    }
-
-    /**
-     * Display checkout/bill page
-     */
-    public function checkout()
-    {
-        require_once __DIR__ . '/../helpers/Auth.php';
         Auth::requireLogin();
 
-        require_once __DIR__ . '/../dao/CustomerDAO.php';
-        $customerDAO = new CustomerDAO();
+        $data      = ApiResponse::body();
+        $productId = (int) ($data['product_id'] ?? 0);
+        $quantity  = max(1, (int) ($data['quantity'] ?? 1));
 
-        require_once __DIR__ . '/../dao/DiscountDAO.php';
-        $discountDAO = new DiscountDAO();
-
-        // Get customer's default info (will be null if not set)
-        $customer = $customerDAO->getByUserId($_SESSION['UID']);
-
-        // Get active discount coupons
-        $activeDiscounts = $discountDAO->getActiveDiscounts();
-
-        // Pass to checkout view
-        include __DIR__ . '/../views/shop/checkout.php';
-    }
-
-    /**
-     * Apply discount coupon (AJAX)
-     */
-    public function applyDiscount()
-    {
-        header('Content-Type: application/json');
-
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            echo json_encode(['success' => false, 'message' => 'Invalid request method']);
-            return;
+        if ($productId <= 0) {
+            ApiResponse::error('Invalid product ID.', 422);
         }
 
-        $discountCode = $_POST['discount_code'] ?? '';
-        $subtotal = $_POST['subtotal'] ?? 0;
+        $result = $this->cartService->addItem(Auth::userId(), $productId, $quantity);
 
-        $result = $this->cartService->applyDiscount($discountCode, $subtotal);
-        echo json_encode($result);
+        if (!$result['success']) {
+            ApiResponse::error($result['message'], 422);
+        }
+
+        ApiResponse::success([
+            'cartCount' => $result['cartCount'] ?? 0,
+        ], $result['message'], 201);
     }
 
     /**
-     * Place order and save to database
+     * PUT /api/cart/items
+     * Body: { product_id, quantity }
      */
-    public function placeOrder()
+    public function update(): void
     {
-        require_once __DIR__ . '/../helpers/Auth.php';
         Auth::requireLogin();
 
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: /volta/public/checkout');
-            exit;
+        $data      = ApiResponse::body();
+        $productId = (int) ($data['product_id'] ?? 0);
+        $quantity  = (int) ($data['quantity'] ?? 0);
+
+        if ($productId <= 0) {
+            ApiResponse::error('Invalid product ID.', 422);
         }
 
-        // Get form data
-        $receiverName = trim($_POST['receiver_name'] ?? '');
-        $phone = trim($_POST['phone'] ?? '');
-        $address = trim($_POST['address'] ?? '');
-        $paymentMethod = $_POST['payment_method'] ?? 'COD';
-        $discountCode = trim($_POST['discount_code'] ?? '');
+        $result = $this->cartService->updateItem(Auth::userId(), $productId, $quantity);
 
-        // Validate required fields
-        if (empty($receiverName) || empty($phone) || empty($address)) {
-            $_SESSION['error'] = 'Please fill in all required fields';
-            header('Location: /volta/public/checkout');
-            exit;
+        if (!$result['success']) {
+            ApiResponse::error($result['message'], 422);
         }
 
-        // Check if cart is empty
-        if (empty($_SESSION['cart'])) {
-            $_SESSION['error'] = 'Your cart is empty';
-            header('Location: /volta/public/cart');
-            exit;
-        }
-
-        try {
-            require_once __DIR__ . '/../../config/database.php';
-            require_once __DIR__ . '/../dao/ProductDAO.php';
-            require_once __DIR__ . '/../dao/DiscountDAO.php';
-
-            $db = getDB();
-            $productDAO = new ProductDAO();
-            $discountDAO = new DiscountDAO();
-
-            // Calculate totals
-            $subtotal = 0;
-            $cartItems = [];
-
-            foreach ($_SESSION['cart'] as $productId => $quantity) {
-                $product = $productDAO->getById($productId);
-                if (!$product)
-                    continue;
-
-                // Check stock
-                if ($product->getQuantity() < $quantity) {
-                    $_SESSION['error'] = "Not enough stock for: {$product->getProductName()}";
-                    header('Location: /volta/public/cart');
-                    exit;
-                }
-
-                $price = $product->getPrice() * (1 - $product->getDiscountRate() / 100);
-                $itemTotal = $price * $quantity;
-                $subtotal += $itemTotal;
-
-                $cartItems[] = [
-                    'product_id' => $productId,
-                    'quantity' => $quantity,
-                    'price' => $price
-                ];
-            }
-
-            // Apply discount if provided
-            $discountAmount = 0;
-            $discountCoupon = null;
-
-            if (!empty($discountCode)) {
-                $discount = $discountDAO->getByCode($discountCode);
-                if ($discount && $discount->getStatus() === 'Activate' && $discount->getQuantity() > 0) {
-                    $discountAmount = $discount->getMoneyDeduct();
-                    $discountCoupon = $discountCode;
-                }
-            }
-
-            $total = $subtotal;
-            $bill = max(0, $subtotal - $discountAmount);
-
-            // Start transaction
-            $db->beginTransaction();
-
-            // Insert order
-            $orderDate = date('d-m-Y');
-            $sql = "INSERT INTO `ORDER` (UID, OrderDate, Total, DiscountCoupon, Status, PhoneNum, Address, ReceiverName, Transaction, PaymentMethod, Bill) 
-                    VALUES (?, ?, ?, ?, 'Pending', ?, ?, ?, 'Unpaid', ?, ?)";
-
-            $stmt = $db->prepare($sql);
-            $stmt->execute([
-                $_SESSION['UID'],
-                $orderDate,
-                $total,
-                $discountCoupon,
-                $phone,
-                $address,
-                $receiverName,
-                $paymentMethod,
-                $bill
-            ]);
-
-            $orderId = $db->lastInsertId();
-
-            // Insert order items and update stock
-            foreach ($cartItems as $item) {
-                // Insert into CONTAIN
-                $sql = "INSERT INTO CONTAIN (Order_ID, Product_ID, Quantity) VALUES (?, ?, ?)";
-                $stmt = $db->prepare($sql);
-                $stmt->execute([$orderId, $item['product_id'], $item['quantity']]);
-
-                // Update product quantity
-                $sql = "UPDATE PRODUCT SET Quantity = Quantity - ? WHERE Product_ID = ?";
-                $stmt = $db->prepare($sql);
-                $stmt->execute([$item['quantity'], $item['product_id']]);
-            }
-
-            // Update discount quantity if used
-            if ($discountCoupon) {
-                $sql = "UPDATE DISCOUNT_COUPON SET Quantity = Quantity - 1 WHERE Code = ?";
-                $stmt = $db->prepare($sql);
-                $stmt->execute([$discountCoupon]);
-            }
-
-            $db->commit();
-
-            // Clear cart
-            unset($_SESSION['cart']);
-
-            // Redirect to success page
-            $_SESSION['success'] = 'Order placed successfully!';
-            header("Location: /volta/public/order-success/$orderId");
-            exit;
-
-        } catch (Exception $e) {
-            if (isset($db)) {
-                $db->rollBack();
-            }
-            error_log("Place order error: " . $e->getMessage());
-            $_SESSION['error'] = 'Failed to place order. Please try again.';
-            header('Location: /volta/public/checkout');
-            exit;
-        }
+        ApiResponse::success([
+            'subtotal'  => $result['subtotal'] ?? 0,
+            'cartCount' => $result['cartCount'] ?? 0,
+        ], $result['message']);
     }
 
     /**
-     * Display order success page
+     * DELETE /api/cart/items/{productId}
      */
-    public function orderSuccess($orderId)
+    public function remove(int $productId): void
     {
-        require_once __DIR__ . '/../helpers/Auth.php';
         Auth::requireLogin();
 
-        require_once __DIR__ . '/../dao/CartDAO.php';
-        $cartDAO = new CartDAO();
+        $result = $this->cartService->removeItem(Auth::userId(), $productId);
 
-        $order = $cartDAO->getById($orderId);
+        ApiResponse::success([
+            'subtotal'  => $result['subtotal'] ?? 0,
+            'cartCount' => $result['cartCount'] ?? 0,
+        ], $result['message']);
+    }
+
+    /**
+     * DELETE /api/cart
+     */
+    public function clear(): void
+    {
+        Auth::requireLogin();
+
+        $this->cartService->clearCart(Auth::userId());
+        ApiResponse::success(null, 'Cart cleared.');
+    }
+
+    /**
+     * GET /api/cart/checkout
+     */
+    public function checkout(): void
+    {
+        Auth::requireLogin();
+
+        $data = $this->cartService->getCheckoutData(Auth::userId());
+        if (!$data) {
+            ApiResponse::error('Cart is empty.', 422);
+        }
+
+        // Serialize items
+        $items = array_map(function ($item) {
+            return [
+                'id'            => $item->id,
+                'product_id'    => $item->productId,
+                'quantity'      => $item->quantity,
+                'product_name'  => $item->productName,
+                'product_price' => $item->productPrice,
+                'line_total'    => round(($item->productPrice ?? 0) * $item->quantity, 2),
+            ];
+        }, $data['items']);
+
+        ApiResponse::success([
+            'items'     => $items,
+            'subtotal'  => $data['subtotal'],
+            'count'     => $data['count'],
+            'addresses' => $data['addresses'],
+        ]);
+    }
+
+    /**
+     * POST /api/cart/apply-discount
+     * Body: { discount_code, subtotal }
+     */
+    public function applyDiscount(): void
+    {
+        Auth::requireLogin();
+
+        $data     = ApiResponse::body();
+        $code     = $data['discount_code'] ?? '';
+        $subtotal = (float) ($data['subtotal'] ?? 0);
+
+        if (empty($code)) {
+            ApiResponse::error('Discount code is required.', 422);
+        }
+
+        $result = $this->cartService->applyDiscount($code, $subtotal);
+
+        if (!$result['valid']) {
+            ApiResponse::error($result['message'], 422);
+        }
+
+        ApiResponse::success([
+            'discount_amount' => $result['amount'],
+            'total'           => $result['total'],
+        ], $result['message']);
+    }
+
+    /**
+     * POST /api/cart/place-order
+     * Body: { address_id?, discount_code? }
+     */
+    public function placeOrder(): void
+    {
+        Auth::requireLogin();
+
+        $data = ApiResponse::body();
+
+        $result = $this->cartService->placeOrder(Auth::userId(), $data);
+
+        if (!$result['success']) {
+            ApiResponse::error($result['message'], 422);
+        }
+
+        ApiResponse::success([
+            'order_id' => $result['orderId'],
+        ], $result['message'], 201);
+    }
+
+    /**
+     * GET /api/orders/my
+     * Customer's own orders.
+     */
+    public function myOrders(): void
+    {
+        Auth::requireLogin();
+
+        require_once __DIR__ . '/../services/OrderService.php';
+        $orderService = new OrderService();
+        $orders = $orderService->getByUser(Auth::userId());
+
+        ApiResponse::success(ApiResponse::dtoList($orders));
+    }
+
+    /**
+     * GET /api/orders/my/{id}
+     * Customer's own order detail.
+     */
+    public function myOrderDetail(int $orderId): void
+    {
+        Auth::requireLogin();
+
+        $data = $this->cartService->getOrderDetails($orderId);
+        if (!$data) {
+            ApiResponse::error('Order not found.', 404);
+        }
 
         // Verify order belongs to user
-        if (!$order || $order['UID'] != $_SESSION['UID']) {
-            header('Location: /volta/public/');
-            exit;
+        if ($data['order']->userId !== Auth::userId()) {
+            ApiResponse::error('Forbidden.', 403);
         }
 
-        $orderItems = $cartDAO->getOrderItems($orderId);
-
-        include __DIR__ . '/../views/shop/order_success.php';
+        ApiResponse::success([
+            'order' => ApiResponse::dto($data['order']),
+            'items' => $data['items'],
+        ]);
     }
 }

@@ -1,40 +1,82 @@
 <?php
+// app/controllers/ShopController.php
+// Public storefront endpoints
+
+require_once __DIR__ . '/../helpers/ApiResponse.php';
 require_once __DIR__ . '/../services/ShopService.php';
 
-class ShopController {
-    private $shopService;
+class ShopController
+{
+    private ShopService $shopService;
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->shopService = new ShopService();
     }
 
-    public function index() {
-        $per_page = 12;
-        $current_page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-        $search = $_GET['search'] ?? '';
-        $category = $_GET['category'] ?? '';
+    /**
+     * GET /api/shop/products?page=&limit=&category_id=&search=
+     */
+    public function index(): void
+    {
+        $page       = max(1, (int) ($_GET['page'] ?? 1));
+        $limit      = max(1, min(60, (int) ($_GET['limit'] ?? 12)));
+        $categoryId = isset($_GET['category_id']) ? (int) $_GET['category_id'] : null;
+        $search     = $_GET['search'] ?? null;
 
-        $data = $this->shopService->getPaginatedProducts($search, $category, $per_page, $current_page);
+        $result = $this->shopService->getProducts($page, $limit, $categoryId, $search);
 
-        $products = $data['products'];
-        $productImages = $data['images'];
-        $pagination = $data['pagination'];
-
-        include __DIR__ . '/../views/shop/shop.php';
-    }
-
-    public function productDetail($id) {
-        $data = $this->shopService->getProductDetail($id);
-
-        if (!$data) {
-            http_response_code(404);
-            require_once __DIR__ . '/../views/public/404.php';
-            return;
+        // Serialize images map
+        $imagesMap = [];
+        foreach ($result['images'] as $productId => $imgDto) {
+            $imagesMap[$productId] = $imgDto ? ApiResponse::dto($imgDto) : null;
         }
 
-        $product = $data['product'];
-        $productImages = $data['images'];
+        ApiResponse::paginated(
+            ApiResponse::dtoList($result['data']),
+            [
+                'page'   => $result['page'],
+                'limit'  => $result['limit'],
+                'total'  => $result['total'],
+                'images' => $imagesMap,
+            ]
+        );
+    }
 
-        include __DIR__ . '/../views/shop/product-detail.php';
+    /**
+     * GET /api/shop/products/{id}
+     */
+    public function show(int $id): void
+    {
+        $data = $this->shopService->getProductDetail($id);
+        if (!$data) {
+            ApiResponse::error('Product not found.', 404);
+        }
+
+        ApiResponse::success([
+            'product' => ApiResponse::dto($data['product']),
+            'images'  => ApiResponse::dtoList($data['images']),
+        ]);
+    }
+
+    /**
+     * GET /api/shop/categories
+     */
+    public function categories(): void
+    {
+        $categories = $this->shopService->getCategories();
+        ApiResponse::success(ApiResponse::dtoList($categories));
+    }
+
+    /**
+     * GET /api/shop/featured?badge=&limit=
+     */
+    public function featured(): void
+    {
+        $badge = $_GET['badge'] ?? 'hot';
+        $limit = max(1, min(50, (int) ($_GET['limit'] ?? 8)));
+
+        $products = $this->shopService->getFeatured($badge, $limit);
+        ApiResponse::success(ApiResponse::dtoList($products));
     }
 }

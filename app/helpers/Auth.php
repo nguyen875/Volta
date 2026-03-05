@@ -2,49 +2,70 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+
+require_once __DIR__ . '/ApiResponse.php';
+
 class Auth
 {
-    public static function isLoggedIn()
+    public static function isLoggedIn(): bool
     {
-        return isset($_SESSION['UID']) && isset($_SESSION['Role']);
+        return isset($_SESSION['user_id']);
     }
 
-    public static function isAdmin()
+    public static function isAdmin(): bool
     {
-        return self::isLoggedIn() && $_SESSION['Role'] === 'Admin';
+        return self::isLoggedIn() && ($_SESSION['role'] ?? '') === 'admin';
     }
 
-    public static function isCustomer()
+    public static function isCustomer(): bool
     {
-        return self::isLoggedIn() && $_SESSION['Role'] === 'Customer';
+        return self::isLoggedIn() && ($_SESSION['role'] ?? '') === 'customer';
     }
 
-    public static function requireLogin()
+    public static function userId(): ?int
+    {
+        return $_SESSION['user_id'] ?? null;
+    }
+
+    /**
+     * Require the user to be logged in. Returns JSON 401 if not.
+     */
+    public static function requireLogin(): void
     {
         if (!self::isLoggedIn()) {
-            header("Location: /volta/public/401?reason=login");
-            exit;
+            ApiResponse::error('Authentication required.', 401);
         }
         // Check session timeout (30 minutes)
         if (isset($_SESSION['LAST_ACTIVITY']) && (time() - $_SESSION['LAST_ACTIVITY'] > 1800)) {
-            self::logout(true); // expired logout
-            header("Location: /volta/public/401?reason=expired");
-            exit;
+            self::logout();
+            ApiResponse::error('Session expired. Please log in again.', 401);
         }
-        $_SESSION['LAST_ACTIVITY'] = time(); // update last activity
+        $_SESSION['LAST_ACTIVITY'] = time();
     }
 
-    public static function requireAdmin()
+    /**
+     * Require admin role. Returns JSON 403 if not.
+     */
+    public static function requireAdmin(): void
     {
         self::requireLogin();
         if (!self::isAdmin()) {
-            http_response_code(403);
-            header("Location: /volta/public/401?reason=forbidden");
-            exit;
+            ApiResponse::error('Forbidden. Admin access required.', 403);
         }
     }
 
-    public static function logout($expired = false)
+    /**
+     * Set session data after successful login.
+     */
+    public static function login(int $userId, string $role, string $fullName): void
+    {
+        $_SESSION['user_id'] = $userId;
+        $_SESSION['role']    = $role;
+        $_SESSION['name']    = $fullName;
+        $_SESSION['LAST_ACTIVITY'] = time();
+    }
+
+    public static function logout(): void
     {
         // clear session securely
         $_SESSION = [];
@@ -61,11 +82,5 @@ class Auth
             );
         }
         session_destroy();
-        if ($expired) {
-            return; // don't redirect, let caller handle
-        }
-        header("Location: /volta/public/login");
-        exit;
     }
 }
-?>
