@@ -1,5 +1,4 @@
 <?php
-require __DIR__ . '/../vendor/autoload.php';
 
 $dotenv = Dotenv\Dotenv::createImmutable(dirname(__DIR__));
 $dotenv->load();
@@ -7,27 +6,29 @@ $dotenv->load();
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+
 class Database
 {
-    public $conn;
-    private $servername = "localhost";
-    private $username = "root";
-    private $db_name = "volta";
-    private $db_password;
+    private static ?PDO $pdo = null;
 
-    public function __construct()
+    public static function getConnection(): PDO
     {
-        $this->servername = $_ENV["DB_HOST"];
-        $this->username = $_ENV["DB_USERNAME"];
-        $this->db_password = $_ENV['DB_PASSWORD'] ?? '';
-        $this->db_name = $_ENV['DB_NAME'] ?? '';
-        $this->conn = new mysqli($this->servername, $this->username, $this->db_password, $this->db_name);
+        if (self::$pdo === null) {
+            $host   = $_ENV['DB_HOST']     ?? 'localhost';
+            $dbname = $_ENV['DB_NAME']     ?? 'volta';
+            $user   = $_ENV['DB_USERNAME'] ?? 'root';
+            $pass   = $_ENV['DB_PASSWORD'] ?? '';
 
-        if ($this->conn->connect_error) {
-            die("Connection failed: " . $this->conn->connect_error);
+            $dsn = "mysql:host={$host};dbname={$dbname};charset=utf8mb4";
+
+            self::$pdo = new PDO($dsn, $user, $pass, [
+                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES   => false,
+            ]);
         }
+
+        return self::$pdo;
     }
 }
-
-$db = new Database();
 ?>

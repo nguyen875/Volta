@@ -2,68 +2,45 @@
 class Discount {
     private $id;
     private $code;
-    private $moneyDeduct;
-    private $condition;
-    private $quantity;
-    private $status;
+    private $type;
+    private $value;
+    private $minOrder;
+    private $usesRemaining;
+    private $expiresAt;
 
-    public function __construct($id = null, $code = '', $moneyDeduct = 0, $condition = '', $quantity = 0, $status = 'Activate') {
+    public function __construct(
+        $id = null,
+        $code = '',
+        $type = 'percent',
+        $value = 0.00,
+        $minOrder = 0.00,
+        $usesRemaining = null,
+        $expiresAt = null
+    ) {
         $this->id = $id;
         $this->code = $code;
-        $this->moneyDeduct = $moneyDeduct;
-        $this->condition = $condition;
-        $this->quantity = $quantity;
-        $this->status = $status;
+        $this->type = $type;
+        $this->value = $value;
+        $this->minOrder = $minOrder;
+        $this->usesRemaining = $usesRemaining;
+        $this->expiresAt = $expiresAt;
     }
 
     // Getters
-    public function getId() {
-        return $this->id;
-    }
-
-    public function getCode() {
-        return $this->code;
-    }
-
-    public function getMoneyDeduct() {
-        return $this->moneyDeduct;
-    }
-
-    public function getCondition() {
-        return $this->condition;
-    }
-
-    public function getQuantity() {
-        return $this->quantity;
-    }
-
-    public function getStatus() {
-        return $this->status;
-    }
+    public function getId() { return $this->id; }
+    public function getCode() { return $this->code; }
+    public function getType() { return $this->type; }
+    public function getValue() { return $this->value; }
+    public function getMinOrder() { return $this->minOrder; }
+    public function getUsesRemaining() { return $this->usesRemaining; }
+    public function getExpiresAt() { return $this->expiresAt; }
 
     // Setters
-    public function setId($id) {
-        $this->id = $id;
-    }
-
-    public function setCode($code) {
-        $this->code = $code;
-    }
-
-    public function setMoneyDeduct($moneyDeduct) {
-        $this->moneyDeduct = $moneyDeduct;
-    }
-
-    public function setCondition($condition) {
-        $this->condition = $condition;
-    }
-
-    public function setQuantity($quantity) {
-        $this->quantity = $quantity;
-    }
-
-    public function setStatus($status) {
-        $this->status = $status;
-    }
+    public function setId($id) { $this->id = $id; }
+    public function setCode($code) { $this->code = $code; }
+    public function setType($type) { $this->type = $type; }
+    public function setValue($value) { $this->value = $value; }
+    public function setMinOrder($minOrder) { $this->minOrder = $minOrder; }
+    public function setUsesRemaining($usesRemaining) { $this->usesRemaining = $usesRemaining; }
+    public function setExpiresAt($expiresAt) { $this->expiresAt = $expiresAt; }
 }
-?>

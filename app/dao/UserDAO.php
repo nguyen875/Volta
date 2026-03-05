@@ -1,136 +1,64 @@
 <?php
-require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../models/User.php';
+require_once __DIR__ . '/BaseDAO.php';
 
-class UserDAO {
-    private $db;
-    
-    public function __construct() {
-        $this->db = getDB(); // PDO instance
+class UserDAO extends BaseDAO
+{
+    protected string $table      = 'users';
+    protected string $primaryKey = 'id';
+
+    /**
+     * Find a user by email address.
+     */
+    public function findByEmail(string $email): ?array
+    {
+        return $this->findOneWhere(['email' => $email]);
     }
-    
-    // CREATE
-    public function create(User $user) {
-        $sql = "INSERT INTO LOGIN (Name, Email, Password, Role) VALUES (?, ?, ?, ?)";
-        $stmt = $this->db->prepare($sql);
-        return $stmt->execute([
-            $user->getUsername(),
-            $user->getEmail(),
-            password_hash($user->getPassword(), PASSWORD_DEFAULT),
-            $user->getRole()
+
+    /**
+     * Search users by name or email with pagination.
+     */
+    public function search(string $keyword, int $page = 1, int $limit = 20): array
+    {
+        $like   = "%{$keyword}%";
+        $offset = ($page - 1) * $limit;
+
+        $countStmt = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM {$this->table} WHERE full_name LIKE :kw OR email LIKE :kw2"
+        );
+        $countStmt->execute([':kw' => $like, ':kw2' => $like]);
+        $total = (int) $countStmt->fetchColumn();
+
+        $dataStmt = $this->pdo->prepare(
+            "SELECT * FROM {$this->table}
+             WHERE full_name LIKE :kw OR email LIKE :kw2
+             ORDER BY created_at DESC
+             LIMIT :limit OFFSET :offset"
+        );
+        $dataStmt->bindValue(':kw',     $like);
+        $dataStmt->bindValue(':kw2',    $like);
+        $dataStmt->bindValue(':limit',  $limit,  PDO::PARAM_INT);
+        $dataStmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $dataStmt->execute();
+
+        return [
+            'data'  => $dataStmt->fetchAll(PDO::FETCH_ASSOC),
+            'total' => $total,
+            'page'  => $page,
+            'limit' => $limit,
+        ];
+    }
+
+    /**
+     * Register a new user (hashes the plain-text password).
+     * Returns the new user ID.
+     */
+    public function register(string $email, string $password, string $fullName = '', string $phone = ''): int
+    {
+        return $this->insert([
+            'email'         => $email,
+            'password_hash' => password_hash($password, PASSWORD_DEFAULT),
+            'full_name'     => $fullName,
+            'phone'         => $phone,
         ]);
-    }
-    
-    // READ - Get all users with pagination and search
-    public function getAll($search = '', $limit = null, $offset = 0) {
-        $sql = "SELECT * FROM LOGIN";
-        $params = [];
-        
-        if (!empty($search)) {
-            $sql .= " WHERE (Name LIKE :search OR Email LIKE :search)";
-            $params[':search'] = "%{$search}%";
-        }
-
-        $sql .= " ORDER BY UID DESC";
-        
-        if ($limit !== null) {
-            $sql .= " LIMIT :limit OFFSET :offset";
-        }
-
-        $stmt = $this->db->prepare($sql);
-        
-        foreach ($params as $key => $value) {
-            $stmt->bindValue($key, $value);
-        }
-        
-        if ($limit !== null) {
-            $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-            $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-        }
-        
-        $stmt->execute();
-        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $users = [];
-        
-        foreach ($result as $row) {
-            $users[] = new User(
-                $row['UID'],
-                $row['Name'],
-                $row['Email'],
-                $row['Role']
-            );
-        }
-        return $users;
-    }
-
-    // Get total count for pagination
-    public function getTotalCount($search = '') {
-        $sql = "SELECT COUNT(*) as total FROM LOGIN";
-        $params = [];
-        
-        if (!empty($search)) {
-            $sql .= " WHERE (Name LIKE :search OR Email LIKE :search)";
-            $params[':search'] = "%{$search}%";
-        }
-        
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        return (int)$row['total'];
-    }
-    
-    // READ - Get by ID
-    public function getById($id) {
-        $sql = "SELECT * FROM LOGIN WHERE UID = ?";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([$id]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if ($row) {
-            return new User(
-                $row['UID'],
-                $row['Name'],
-                $row['Email'],
-                $row['Role']
-            );
-        }
-        return null;
-    }
-    
-    // UPDATE
-    public function update(User $user) {
-        $sql = "UPDATE LOGIN SET Name = ?, Email = ?, Role = ? WHERE UID = ?";
-        $stmt = $this->db->prepare($sql);
-        return $stmt->execute([
-            $user->getUsername(),
-            $user->getEmail(),
-            $user->getRole(),
-            $user->getId()
-        ]);
-    }
-    
-    // DELETE
-    public function delete($id) {
-        try {
-            // Delete from ADMIN table if exists
-            $sql = "DELETE FROM ADMIN WHERE UID = ?";
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute([$id]);
-            
-            // Delete from CUSTOMER table if exists
-            $sql = "DELETE FROM CUSTOMER WHERE UID = ?";
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute([$id]);
-            
-            // Delete from LOGIN table
-            $sql = "DELETE FROM LOGIN WHERE UID = ?";
-            $stmt = $this->db->prepare($sql);
-            return $stmt->execute([$id]);
-            
-        } catch (Exception $e) {
-            error_log("UserDAO delete error: " . $e->getMessage());
-            throw $e;
-        }
     }
 }
