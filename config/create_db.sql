@@ -91,7 +91,7 @@ CREATE TABLE addresses (
 -- ── ORDERS ──────────────────────────────────────────────────
 CREATE TABLE orders (
     id              INT PRIMARY KEY AUTO_INCREMENT,
-    user_id         INT NOT NULL,
+    user_id         INT,
     address_id      INT,
     status          ENUM('pending','paid','shipped','delivered','cancelled') DEFAULT 'pending',
     payment_method  ENUM('cod','credit_card') NOT NULL DEFAULT 'cod',

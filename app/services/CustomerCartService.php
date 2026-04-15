@@ -31,13 +31,78 @@ class CustomerCartService
         $this->addressDAO = new AddressDAO($this->pdo);
     }
 
+    private function getGuestCartMap(): array
+    {
+        $cart = $_SESSION['guest_cart'] ?? [];
+        if (!is_array($cart)) {
+            return [];
+        }
+
+        return $cart;
+    }
+
+    private function setGuestCartMap(array $cart): void
+    {
+        $_SESSION['guest_cart'] = $cart;
+    }
+
+    private function getPrimaryImageUrl(int $productId): ?string
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT url FROM product_images WHERE product_id = :pid AND is_primary = 1 LIMIT 1'
+        );
+        $stmt->execute([':pid' => $productId]);
+
+        $url = $stmt->fetchColumn();
+        return $url !== false ? (string) $url : null;
+    }
+
+    private function buildGuestCartRows(array $guestCart): array
+    {
+        $rows = [];
+
+        foreach ($guestCart as $productId => $qty) {
+            $productId = (int) $productId;
+            $qty = (int) $qty;
+
+            if ($productId <= 0 || $qty <= 0) {
+                continue;
+            }
+
+            $product = $this->productDAO->findById($productId);
+            if (!$product || !(bool) ($product['is_active'] ?? false)) {
+                continue;
+            }
+
+            $rows[] = [
+                'id' => null,
+                'user_id' => null,
+                'product_id' => $productId,
+                'quantity' => $qty,
+                'added_at' => date('Y-m-d H:i:s'),
+                'name' => $product['name'] ?? null,
+                'slug' => $product['slug'] ?? null,
+                'price' => $product['price'] ?? null,
+                'stock' => $product['stock'] ?? null,
+                'image_url' => $this->getPrimaryImageUrl($productId),
+            ];
+        }
+
+        return $rows;
+    }
+
     /**
      * Get all cart items for a user with product details.
      * Returns ['items' => CartItemDTO[], 'subtotal' => float, 'count' => int]
      */
-    public function getCart(int $userId): array
+    public function getCart(?int $userId): array
     {
-        $rows = $this->cartDAO->findByUser($userId);
+        if ($userId !== null) {
+            $rows = $this->cartDAO->findByUser($userId);
+        } else {
+            $rows = $this->buildGuestCartRows($this->getGuestCartMap());
+        }
+
         $items = array_map([CartItemDTO::class, 'fromArray'], $rows);
         $subtotal = 0.0;
 
@@ -56,7 +121,7 @@ class CustomerCartService
      * Add a product to the cart.
      * Returns ['success' => bool, 'message' => string]
      */
-    public function addItem(int $userId, int $productId, int $quantity = 1): array
+    public function addItem(?int $userId, int $productId, int $quantity = 1): array
     {
         // Validate product
         $product = $this->productDAO->findById($productId);
@@ -69,12 +134,20 @@ class CustomerCartService
             return ['success' => false, 'message' => 'Not enough stock available.'];
         }
 
-        $this->cartDAO->addItem($userId, $productId, $quantity);
+        if ($userId !== null) {
+            $this->cartDAO->addItem($userId, $productId, $quantity);
+            $cartCount = $this->cartDAO->countItems($userId);
+        } else {
+            $guestCart = $this->getGuestCartMap();
+            $guestCart[$productId] = ((int) ($guestCart[$productId] ?? 0)) + $quantity;
+            $this->setGuestCartMap($guestCart);
+            $cartCount = count($guestCart);
+        }
 
         return [
             'success' => true,
             'message' => 'Product added to cart.',
-            'cartCount' => $this->cartDAO->countItems($userId),
+            'cartCount' => $cartCount,
         ];
     }
 
@@ -82,7 +155,7 @@ class CustomerCartService
      * Update quantity of a cart item.
      * Returns ['success' => bool, 'message' => string, 'subtotal' => float]
      */
-    public function updateItem(int $userId, int $productId, int $quantity): array
+    public function updateItem(?int $userId, int $productId, int $quantity): array
     {
         if ($quantity <= 0) {
             return $this->removeItem($userId, $productId);
@@ -98,7 +171,16 @@ class CustomerCartService
             return ['success' => false, 'message' => 'Not enough stock available.'];
         }
 
-        $this->cartDAO->updateQuantity($userId, $productId, $quantity);
+        if ($userId !== null) {
+            $this->cartDAO->updateQuantity($userId, $productId, $quantity);
+        } else {
+            $guestCart = $this->getGuestCartMap();
+            if (isset($guestCart[$productId])) {
+                $guestCart[$productId] = $quantity;
+                $this->setGuestCartMap($guestCart);
+            }
+        }
+
         $cart = $this->getCart($userId);
 
         return [
@@ -112,9 +194,16 @@ class CustomerCartService
     /**
      * Remove a product from the cart.
      */
-    public function removeItem(int $userId, int $productId): array
+    public function removeItem(?int $userId, int $productId): array
     {
-        $this->cartDAO->removeItem($userId, $productId);
+        if ($userId !== null) {
+            $this->cartDAO->removeItem($userId, $productId);
+        } else {
+            $guestCart = $this->getGuestCartMap();
+            unset($guestCart[$productId]);
+            $this->setGuestCartMap($guestCart);
+        }
+
         $cart = $this->getCart($userId);
 
         return [
@@ -128,17 +217,26 @@ class CustomerCartService
     /**
      * Clear entire cart.
      */
-    public function clearCart(int $userId): void
+    public function clearCart(?int $userId): void
     {
-        $this->cartDAO->clearCart($userId);
+        if ($userId !== null) {
+            $this->cartDAO->clearCart($userId);
+            return;
+        }
+
+        $this->setGuestCartMap([]);
     }
 
     /**
      * Get cart item count.
      */
-    public function getCartCount(int $userId): int
+    public function getCartCount(?int $userId): int
     {
-        return $this->cartDAO->countItems($userId);
+        if ($userId !== null) {
+            return $this->cartDAO->countItems($userId);
+        }
+
+        return count($this->getGuestCartMap());
     }
 
     // ══════════════════════════════════════════════════════════
@@ -148,14 +246,14 @@ class CustomerCartService
     /**
      * Get checkout data (cart summary + addresses).
      */
-    public function getCheckoutData(int $userId): ?array
+    public function getCheckoutData(?int $userId): ?array
     {
         $cart = $this->getCart($userId);
         if (empty($cart['items'])) {
             return null;
         }
 
-        $addresses = $this->addressDAO->findByUser($userId);
+        $addresses = $userId !== null ? $this->addressDAO->findByUser($userId) : [];
 
         return [
             'items' => $cart['items'],
@@ -207,7 +305,7 @@ class CustomerCartService
      * Place an order from the user's cart.
      * Returns ['success' => bool, 'message' => string, 'orderId' => ?int]
      */
-    public function placeOrder(int $userId, array $orderData): array
+    public function placeOrder(?int $userId, array $orderData): array
     {
         $cart = $this->getCart($userId);
 
@@ -271,7 +369,11 @@ class CustomerCartService
             }
 
             // 4. Clear cart
-            $this->cartDAO->clearCart($userId);
+            if ($userId !== null) {
+                $this->cartDAO->clearCart($userId);
+            } else {
+                $this->setGuestCartMap([]);
+            }
 
             $this->pdo->commit();
 
