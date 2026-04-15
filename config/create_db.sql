@@ -94,6 +94,8 @@ CREATE TABLE orders (
     user_id         INT NOT NULL,
     address_id      INT,
     status          ENUM('pending','paid','shipped','delivered','cancelled') DEFAULT 'pending',
+    payment_method  ENUM('cod','credit_card') NOT NULL DEFAULT 'cod',
+    shipping_fee    DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     total_price     DECIMAL(10,2) NOT NULL,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 

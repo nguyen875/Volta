@@ -215,10 +215,13 @@ class CustomerCartService
             return ['success' => false, 'message' => 'Cart is empty.', 'orderId' => null];
         }
 
-        $addressId = isset($orderData['address_id']) ? (int) $orderData['address_id'] : null;
-        $discountCode = $orderData['discount_code'] ?? null;
-        $subtotal = $cart['subtotal'];
-        $totalPrice = $subtotal;
+        $addressId     = isset($orderData['address_id'])    ? (int) $orderData['address_id'] : null;
+        $discountCode  = $orderData['discount_code']         ?? null;
+        $paymentMethod = $orderData['payment_method']         ?? 'cod';
+        $deliveryTier  = $orderData['delivery_tier']          ?? 'standard';
+        $shippingFee   = $deliveryTier === 'express' ? 15.00 : 0.00;
+        $subtotal      = $cart['subtotal'];
+        $totalPrice    = $subtotal + $shippingFee;
 
         // Apply discount if provided
         $discountId = null;
@@ -235,10 +238,12 @@ class CustomerCartService
 
             // 1. Create order
             $orderId = $this->orderDAO->insert([
-                'user_id' => $userId,
-                'address_id' => $addressId,
-                'status' => 'pending',
-                'total_price' => $totalPrice,
+                'user_id'        => $userId,
+                'address_id'     => $addressId,
+                'status'         => 'pending',
+                'payment_method' => in_array($paymentMethod, ['cod', 'credit_card']) ? $paymentMethod : 'cod',
+                'shipping_fee'   => $shippingFee,
+                'total_price'    => $totalPrice,
             ]);
 
             // 2. Create order items + update stock
