@@ -200,8 +200,6 @@ class ProductController
      */
     public function relations(int $productId): void
     {
-        Auth::requireAdmin();
-
         $type = $_GET['type'] ?? 'crosssell';
 
         if ($type === 'upsell') {

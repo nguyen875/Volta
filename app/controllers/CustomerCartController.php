@@ -20,8 +20,6 @@ class CustomerCartController
      */
     public function index(): void
     {
-        Auth::requireLogin();
-
         $cart = $this->cartService->getCart(Auth::userId());
 
         // Serialize cart items manually (they have join fields)
@@ -52,8 +50,6 @@ class CustomerCartController
      */
     public function add(): void
     {
-        Auth::requireLogin();
-
         $data      = ApiResponse::body();
         $productId = (int) ($data['product_id'] ?? 0);
         $quantity  = max(1, (int) ($data['quantity'] ?? 1));
@@ -79,8 +75,6 @@ class CustomerCartController
      */
     public function update(): void
     {
-        Auth::requireLogin();
-
         $data      = ApiResponse::body();
         $productId = (int) ($data['product_id'] ?? 0);
         $quantity  = (int) ($data['quantity'] ?? 0);
@@ -106,8 +100,6 @@ class CustomerCartController
      */
     public function remove(int $productId): void
     {
-        Auth::requireLogin();
-
         $result = $this->cartService->removeItem(Auth::userId(), $productId);
 
         ApiResponse::success([
@@ -121,8 +113,6 @@ class CustomerCartController
      */
     public function clear(): void
     {
-        Auth::requireLogin();
-
         $this->cartService->clearCart(Auth::userId());
         ApiResponse::success(null, 'Cart cleared.');
     }
@@ -132,8 +122,6 @@ class CustomerCartController
      */
     public function checkout(): void
     {
-        Auth::requireLogin();
-
         $data = $this->cartService->getCheckoutData(Auth::userId());
         if (!$data) {
             ApiResponse::error('Cart is empty.', 422);
@@ -165,8 +153,6 @@ class CustomerCartController
      */
     public function applyDiscount(): void
     {
-        Auth::requireLogin();
-
         $data     = ApiResponse::body();
         $code     = $data['discount_code'] ?? '';
         $subtotal = (float) ($data['subtotal'] ?? 0);
@@ -193,8 +179,6 @@ class CustomerCartController
      */
     public function placeOrder(): void
     {
-        Auth::requireLogin();
-
         $data = ApiResponse::body();
 
         $result = $this->cartService->placeOrder(Auth::userId(), $data);

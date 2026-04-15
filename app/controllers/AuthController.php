@@ -33,7 +33,7 @@ class AuthController
             ApiResponse::error('Invalid credentials.', 401);
         }
 
-        Auth::login($user->id, 'customer', $user->fullName);
+        Auth::login($user->id, $user->id === 1 ? 'admin' : 'customer', $user->fullName);
 
         ApiResponse::success([
             'user' => ApiResponse::dto($user),

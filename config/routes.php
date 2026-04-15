@@ -91,6 +91,7 @@ $router->delete('/^\/api\/bundles\/(\d+)\/items\/(\d+)$/',    'BundleController@
 // ╚═══════════════════════════════════════════════════════════╝
 $router->get('/api/shop/products',                    'ShopController@index');
 $router->get('/^\/api\/shop\/products\/(\d+)$/',      'ShopController@show');
+$router->get('/^\/api\/shop\/products\/slug\/(.+)$/', 'ShopController@showBySlug');
 $router->get('/api/shop/categories',                  'ShopController@categories');
 $router->get('/api/shop/featured',                    'ShopController@featured');
 

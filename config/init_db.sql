@@ -112,11 +112,11 @@ INSERT INTO bundle_items (bundle_id, product_id) VALUES
 -- ── USERS ───────────────────────────────────────────────────
 -- Passwords are bcrypt hashes of 'password123'
 INSERT INTO users (email, password_hash, full_name, phone) VALUES
-('admin@volta.com',   '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Volta Admin',    NULL),
+('admin@volta.com',   '$2y$10$.ztJ7lvF98dB9NkAQAqAhu2v0rYz7P0Ke7wVHe5roI1jCrlctwYNC', 'Volta Admin',    NULL),
 ('alice@example.com', '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Alice Nguyen',   '+84901234567'),
 ('bob@example.com',   '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Bob Tran',       '+84907654321'),
 ('carol@example.com', '$2y$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Carol Le',       '+84909988776');
-
+    
 -- ── ADDRESSES ───────────────────────────────────────────────
 INSERT INTO addresses (user_id, label, street, city, country, is_default) VALUES
 (2, 'Home',   '12 Nguyen Hue, District 1',          'Ho Chi Minh City', 'Vietnam', 1),

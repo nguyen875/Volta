@@ -62,6 +62,29 @@ class ShopService
     }
 
     /**
+     * Get full product detail for the product page by slug.
+     * Returns ['product' => ProductDTO, 'images' => ProductImageDTO[], 'upsells' => [...], 'crosssells' => [...]]
+     */
+    public function getProductDetailBySlug(string $slug): ?array
+    {
+        $row = $this->productDAO->findBySlug($slug);
+        if (!$row || !$row['is_active']) {
+            return null;
+        }
+
+        $product = ProductDTO::fromArray($row);
+
+        // All images
+        $imageRows = $this->imageDAO->findByProduct($product->id);
+        $images = array_map([ProductImageDTO::class, 'fromArray'], $imageRows);
+
+        return [
+            'product' => $product,
+            'images' => $images,
+        ];
+    }
+
+    /**
      * Get full product detail for the product page.
      * Returns ['product' => ProductDTO, 'images' => ProductImageDTO[], 'upsells' => [...], 'crosssells' => [...]]
      */

@@ -44,6 +44,22 @@ class ShopController
     }
 
     /**
+     * GET /api/shop/products/slug/{slug}
+     */
+    public function showBySlug(string $slug): void
+    {
+        $data = $this->shopService->getProductDetailBySlug($slug);
+        if (!$data) {
+            ApiResponse::error('Product not found.', 404);
+        }
+
+        ApiResponse::success([
+            'product' => ApiResponse::dto($data['product']),
+            'images'  => ApiResponse::dtoList($data['images']),
+        ]);
+    }
+
+    /**
      * GET /api/shop/products/{id}
      */
     public function show(int $id): void

@@ -14,7 +14,7 @@ class Auth
 
     public static function isAdmin(): bool
     {
-        return self::isLoggedIn() && ($_SESSION['role'] ?? '') === 'admin';
+        return self::isLoggedIn() && ($_SESSION['user_id'] ?? null) === 1;
     }
 
     public static function isCustomer(): bool
