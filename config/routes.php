@@ -8,7 +8,7 @@ $router = new Router();
 // ║  AUTH                                                     ║
 // ╚═══════════════════════════════════════════════════════════╝
 $router->post('/api/login',  'AuthController@login');
-$router->post('/api/signup', 'AuthController@signup');
+$router->post('/api/register', 'AuthController@signup');
 $router->post('/api/logout', 'AuthController@logout');
 $router->get('/api/me',      'AuthController@me');
 
