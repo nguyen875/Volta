@@ -228,6 +228,8 @@ components:
         name:        { type: string }
         description: { type: string }
         bundle_price: { type: number, format: float }
+        total_product_price: { type: number, format: float, example: 857.0 }
+        off_percentage: { type: number, format: float, example: 24.27 }
         is_active:   { type: boolean }
 
     BundleItemProduct:
